@@ -3,6 +3,7 @@ import { encode as gptEncode, decode as gptDecode } from 'gpt-tokenizer'; // Use
 import { GoogleGenAI } from '@google/genai';
 import * as mammoth from 'mammoth'; // For .docx parsing
 import * as XLSX from 'xlsx'; // Use namespace import with 'xlsx' package name
+import * as pdfjsLib from 'pdfjs-dist';
 import { Bar } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -29,7 +30,7 @@ ChartJS.register(
 const ACCEPTED_EXTENSIONS = [
     '.txt', '.md', '.csv', '.html', '.css', '.js', '.jsx', '.ts', '.tsx',
     '.json', '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.go', '.rs',
-    '.docx', '.xlsx', '.xls'
+    '.docx', '.xlsx', '.xls', '.pdf'
 ];
 const ACCEPT_STRING = [...ACCEPTED_EXTENSIONS].join(',');
 
@@ -50,6 +51,9 @@ function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (..
     timeout = setTimeout(later, wait);
   };
 }
+
+// Configure pdf.js worker source to load from the public directory
+pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
 
 function App() {
   const [text, setText] = useState<string>('');
@@ -250,7 +254,7 @@ function App() {
     const isAcceptedExtension = ACCEPTED_EXTENSIONS.includes(fileExtension);
 
     if (!isAcceptedExtension) {
-         alert(`File type ("${fileExtension}") is not supported. Please upload a supported text-based file, .docx, .xlsx, or .xls.`);
+         alert(`File type ("${fileExtension}") is not supported. Please upload a supported text-based file, .docx, .xlsx, .xls, or .pdf.`);
          setFileName('');
          setText('');
          setError(`Unsupported file type: ${file.name}`);
@@ -296,6 +300,23 @@ function App() {
                 } else {
                      throw new Error('Failed to read Excel file as ArrayBuffer');
                 }
+            } else if (fileExtension === '.pdf') {
+                 if (fileContent instanceof ArrayBuffer) {
+                     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(fileContent) }).promise;
+                     let fullText = '';
+                     for (let i = 1; i <= pdf.numPages; i++) {
+                         const page = await pdf.getPage(i);
+                         const textContent = await page.getTextContent();
+                         // Filter out potential undefined items and join
+                         const pageText = textContent.items
+                             .map(item => ('str' in item ? item.str : ''))
+                             .join(' ');
+                         fullText += pageText + '\n'; // Add page text with a newline separator
+                     }
+                     extractedText = fullText.trim();
+                 } else {
+                     throw new Error('Failed to read PDF file as ArrayBuffer');
+                 }
             } else {
                 // Handle standard text files (already read as text)
                 if (typeof fileContent === 'string') {
@@ -325,8 +346,8 @@ function App() {
         setIsProcessingFile(false);
     };
 
-    // Read as ArrayBuffer for Office formats, otherwise read as text
-    if (fileExtension === '.docx' || fileExtension === '.xlsx' || fileExtension === '.xls') {
+    // Read as ArrayBuffer for Office formats AND PDFs, otherwise read as text
+    if (fileExtension === '.docx' || fileExtension === '.xlsx' || fileExtension === '.xls' || fileExtension === '.pdf') {
         reader.readAsArrayBuffer(file);
     } else {
         reader.readAsText(file);
@@ -546,7 +567,7 @@ function App() {
             </div>
         )}
          <p className="disclaimer">
-            Supports plain text, markdown, code files, .docx, .xlsx, .xls (basic text extraction).
+            Supports plain text, markdown, code files, .docx, .xlsx, .xls, .pdf (basic text extraction).
             Word/token counts are approximate.
             {tokenizerType === 'gemini' && ' Gemini token counting requires an API key and makes network requests.'}
             {tokenizerType === 'gpt' && ' Common tokens (whitespace, periods, dashes) are excluded from the GPT token frequency chart.'}
