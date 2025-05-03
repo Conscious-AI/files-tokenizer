@@ -1,0 +1,283 @@
+/* General Styles */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  margin: 0;
+  padding: 20px 10px; /* Reduced padding */
+  background-color: #121212; /* Dark background */
+  color: #e0e0e0; /* Light text */
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100%;
+  max-width: 700px;
+}
+
+/* App Container */
+.app-container {
+  background-color: #1e1e1e; /* Slightly lighter dark background */
+  padding: 25px; /* Reduced padding */
+  border-radius: 8px; /* Slightly less rounded */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); /* Adjusted shadow for dark theme */
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Reduced gap */
+}
+
+h1 {
+  text-align: center;
+  color: #ffffff; /* White heading */
+  margin: 0 0 10px 0; /* Adjust margin */
+  font-size: 1.7rem; /* Slightly smaller */
+  font-weight: 600;
+}
+
+.processing-indicator {
+    font-size: 0.9rem;
+    color: #bbbbbb; /* Lighter gray for indicator */
+    margin-left: 8px;
+    font-weight: 400;
+}
+
+/* Input Area */
+.input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Reduced gap */
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px; /* Reduced padding */
+  border: 1px solid #444; /* Darker border */
+  border-radius: 4px; /* Less rounded */
+  font-size: 1rem;
+  resize: vertical;
+  min-height: 160px; /* Slightly shorter */
+  line-height: 1.5;
+  background-color: #2c2c2c; /* Dark background for textarea */
+  color: #e0e0e0; /* Light text in textarea */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+textarea::placeholder {
+    color: #888; /* Lighter placeholder text */
+}
+
+textarea:focus {
+    border-color: #58a6ff; /* Adjusted focus color */
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.25); /* Adjusted focus shadow */
+}
+
+.controls-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px; /* Reduced gap */
+    align-items: center;
+    margin-top: 8px; /* Reduced space below textarea */
+}
+
+.file-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Reduced gap */
+  flex-wrap: wrap;
+}
+
+.file-input {
+ display: none; /* Hide the default input */
+}
+
+.file-upload-label {
+  display: inline-block;
+  padding: 8px 15px; /* Reduced padding */
+  background-color: #3081d9; /* Adjusted blue */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem; /* Slightly smaller */
+  font-weight: 500;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.file-upload-label:hover {
+  background-color: #1f6eaf; /* Darker blue on hover */
+}
+
+.file-upload-label:active {
+    transform: scale(0.98);
+}
+
+.file-name {
+  font-style: normal;
+  color: #cccccc; /* Light gray text */
+  font-size: 0.85rem; /* Smaller font */
+  background-color: #333; /* Darker background chip */
+  padding: 4px 8px; /* Reduced padding */
+  border-radius: 3px;
+}
+
+.tokenizer-select-container {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* Reduced gap */
+}
+
+.tokenizer-select-container label {
+    font-size: 0.85rem; /* Slightly smaller */
+    color: #bbbbbb; /* Lighter gray label */
+}
+
+.tokenizer-select-container select {
+    padding: 6px 10px; /* Reduced padding */
+    border: 1px solid #444; /* Darker border */
+    border-radius: 4px;
+    background-color: #2c2c2c; /* Dark background */
+    font-size: 0.85rem; /* Match label */
+    cursor: pointer;
+    color: #e0e0e0; /* Light text */
+    text-indent: 0;
+}
+
+.api-key-container {
+    display: flex;
+    flex-direction: column; /* Stack label and input */
+    gap: 4px; /* Reduced gap */
+    margin-top: 8px; /* Reduced space */
+}
+
+.api-key-container label {
+    font-size: 0.85rem;
+    color: #bbbbbb;
+}
+
+.api-key-container input[type="password"] {
+    padding: 8px 10px; /* Adjust padding */
+    border: 1px solid #444;
+    border-radius: 4px;
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+}
+
+.api-key-container input[type="password"]::placeholder {
+    color: #888;
+}
+
+.api-key-container input[type="password"]:focus {
+    border-color: #58a6ff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.25);
+}
+
+.disclaimer {
+    font-size: 0.8rem; /* Smaller */
+    color: #888; /* Dimmer text */
+    text-align: center;
+    margin-top: 12px; /* Reduced spacing */
+    width: 100%;
+}
+
+/* Counts Display */
+.counts-display {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); /* Slightly smaller min */
+  gap: 15px; /* Reduced gap between boxes */
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.count-box {
+  text-align: center;
+  background-color: #2a2a2a; /* Dark box background */
+  padding: 15px; /* Reduced padding */
+  border-radius: 6px; /* Slightly less rounded */
+  box-shadow: none;
+  border: 1px solid #444; /* Darker border */
+  min-width: auto;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.count-box:hover {
+    transform: translateY(-2px); /* Subtle lift */
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); /* Adjusted shadow */
+}
+
+.count-box h2 {
+  margin: 0 0 6px 0; /* Reduced margin */
+  font-size: 2rem; /* Slightly smaller count */
+  color: #58a6ff; /* Adjusted accent color */
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem; /* Adjust based on font-size */
+}
+
+.count-box p {
+  margin: 0;
+  color: #aaaaaa; /* Lighter gray label */
+  font-size: 0.8rem; /* Smaller */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.error-message {
+    color: #ff8080; /* Brighter red for dark mode */
+    background-color: rgba(255, 128, 128, 0.1); /* Subtle red background */
+    border: 1px solid #ff8080;
+    border-radius: 4px;
+    padding: 8px 12px; /* Reduced padding */
+    margin-top: 10px; /* Reduced margin */
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* Spinner for loading states */
+.spinner {
+  border: 3px solid #444; /* Darker border */
+  border-top: 3px solid #58a6ff; /* Accent color */
+  border-radius: 50%;
+  width: 1.5rem; /* Smaller spinner */
+  height: 1.5rem;
+  animation: spin 1s linear infinite;
+  display: inline-block; /* Make it sit inline */
+  vertical-align: middle; /* Align nicely with text */
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Ensure count box h2 aligns spinner correctly */
+.count-box h2 .spinner {
+    margin: 0 auto; /* Center spinner if it's the only content */
+}
+
+/* Additions for side-by-side charts */
+.charts-container {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  gap: 20px; /* Space between charts */
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-wrapper {
+  flex: 1 1 300px; /* Adjusted flex-basis, allow shrinking more easily */
+  min-width: 280px; /* Slightly smaller min-width */
+  height: 400px; /* Fixed height for consistency */
+  background-color: #2a2a2a; /* Dark background to match theme */
+  padding: 15px;
+  border-radius: 8px;
+  /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); Removed light shadow */
+  border: 1px solid #444; /* Add border consistent with count-box */
+}
