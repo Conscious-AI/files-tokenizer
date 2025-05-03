@@ -57,8 +57,8 @@ We are actively looking for contributions! They are heartily welcome! Please fee
 
 ## TODO (help please!)
 
-[ ] Better and organized UI
-[ ] Multi-file uploads
-[ ] Image token counting (from upload and screenshot)
-[ ] Better text analysis and recommendations to reduce token usage
-[ ] Automatic token minification
+- [ ] Better and organized UI
+- [ ] Multi-file uploads
+- [ ] Image token counting (from upload and screenshot)
+- [ ] Better text analysis and recommendations to reduce token usage
+- [ ] Automatic token minification
