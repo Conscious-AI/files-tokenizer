@@ -16,13 +16,13 @@ A text analysis and tokenizer tool built with React, TypeScript, and Vite. It al
     *   Spreadsheets (`.xlsx`, `.xls`)
     *   Code files (`.js`, `.ts`, `.py`, `.java`, `.c`, etc.)
     *   And more! (See `ACCEPTED_EXTENSIONS` in `src/App.tsx`)
-*   **Metrics:** Calculates and displays:
+*   **Metrics:**
     *   Character Count
     *   Word Count
     *   Token Count
-*   **Tokenizers:** Choose between:
-    *   **GPT Tokenizer:** Uses the `gpt-tokenizer` library for fast, local tokenization based on GPT-3/GPT-4 encodings.
-    *   **Gemini Tokenizer:** Uses the Google Generative AI API (`@google/genai`) to count tokens according to Gemini models. Requires a Google AI API key.
+*   **Tokenizers:**
+    *   **GPT Tokenizer:** Uses the `gpt-tokenizer` library for fast, local tokenization based on `gpt-4o` model.
+    *   **Gemini Tokenizer:** Uses the Google Generative AI API (`@google/genai`) to count tokens based on `gemini-2.5-flash` model. Requires a Google AI API key.
 *   **Frequency Analysis:**
     *   Displays the top 10 most frequent words in the input text.
     *   Displays the top 10 most frequent GPT tokens (when the GPT tokenizer is selected).
@@ -32,7 +32,7 @@ A text analysis and tokenizer tool built with React, TypeScript, and Vite. It al
 1.  **Clone the repository:**
     ```bash
     git clone <repository-url>
-    cd tokenizer # Or your project directory name
+    cd tokenizer
     ```
 2.  **Install dependencies:**
     ```bash
@@ -55,9 +55,15 @@ A text analysis and tokenizer tool built with React, TypeScript, and Vite. It al
 
 We are actively looking for contributions! They are heartily welcome! Please feel free to submit issues or pull requests.
 
+## Thanks
+
+- Thanks to @niieani for his amazing lib [https://github.com/niieani/gpt-tokenizer](https://github.com/niieani/gpt-tokenizer)
+
 ## TODO (help please!)
 
 - [ ] Better and organized UI
+- [ ] Add claude tokenizer support
+- [ ] Input/Output Pricing for each model
 - [ ] Multi-file uploads
 - [ ] Image token counting (from upload and screenshot)
 - [ ] Better text analysis and recommendations to reduce token usage
