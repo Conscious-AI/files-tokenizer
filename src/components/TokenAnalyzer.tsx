@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, ChangeEvent, useRef } from "react";
+import { FixedSizeList as List } from "react-window";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -213,39 +214,104 @@ function TokenFrequencyChart({ data }: { data: { item: string; count: number }[]
 
 const monospace = `"Roboto Mono",sfmono-regular,consolas,liberation mono,menlo,courier,monospace`;
 
-function TokenizedText({ tokens, showIds }: { tokens: (string | number)[]; showIds: boolean }) {
+// Line-based virtualization to avoid overlapping and keep structure ---------------------------------
+
+interface LineRowProps {
+    index: number;
+    style: React.CSSProperties;
+    data: {
+        lines: string[][];
+        showIds: boolean;
+    };
+}
+
+const LineRow = React.memo(({ index, style, data }: LineRowProps) => {
+    const { lines, showIds } = data;
+    const line = lines[index];
+    if (!line) return null;
+
     return (
-        <div
-            className="flex flex-wrap content-start overflow-y-auto p-2 h-full"
-            style={{ 
-                fontFamily: monospace,
-                lineHeight: "1.5",
-                alignContent: "flex-start"
-            }}
-        >
-            {tokens.map((token, idx) => (
-                <span
-                    key={idx}
-                    className="inline-block"
-                    style={{ 
-                        backgroundColor: pastelColors[idx % pastelColors.length],
-                        padding: "0",
-                        marginRight: "0",
-                        marginBottom: "4px",
-                        height: "1.5em"
-                    }}
-                >
-                    <pre className="text-xs px-0.5" style={{ margin: 0, display: "inline" }}>
-                        {showIds
-                            ? String(token)
-                            : String(token).replace(/ /g, "\u00A0").replace(/\n/g, "\\n")}
-                    </pre>
-                </span>
-            ))}
+        <div style={style} className="flex items-center px-2 whitespace-nowrap">
+            {line.map((token, idx) => {
+                const tokenStr = String(token);
+                const isNewline = tokenStr === "↵";
+                return (
+                    <span
+                        key={idx}
+                        className="inline-block"
+                        style={{
+                            backgroundColor: isNewline ? "#ff6b6b40" : pastelColors[(index + idx) % pastelColors.length],
+                            border: isNewline ? "1px dashed #ff6b6b" : "none",
+                            padding: "0",
+                            marginRight: "1px",
+                            height: "1.5em",
+                            minWidth: isNewline ? "20px" : "auto",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: isNewline ? "center" : "flex-start",
+                        }}
+                    >
+                        <pre className="text-xs px-0.5" style={{ margin: 0 }}>
+                            {isNewline
+                                ? "↵"
+                                : showIds
+                                ? tokenStr
+                                : tokenStr.replace(/ /g, "\u00A0")}
+                        </pre>
+                    </span>
+                );
+            })}
+        </div>
+    );
+});
+
+function TokenizedText({ tokens, showIds, model }: { tokens: (string | number)[]; showIds: boolean; model: string }) {
+    // Split tokens into lines preserving newlines
+    const lines = useMemo(() => {
+        const result: string[][] = [[]];
+        tokens.forEach((tok) => {
+            const decodedStr = showIds ? gptDecode([Number(tok)], model) : String(tok);
+            const parts = decodedStr.split('\n');
+            parts.forEach((part, idx) => {
+                if (part || (idx > 0 && parts.length > 1)) { // Push even if empty for continued lines
+                    const toPush = showIds
+                        ? (idx === 0 ? String(tok) : `[cont ${tok}]`)
+                        : part;
+                    result[result.length - 1].push(toPush);
+                }
+                if (idx < parts.length - 1) {
+                    result[result.length - 1].push('↵');
+                    result.push([]);
+                }
+            });
+        });
+        return result;
+    }, [tokens, showIds, model]);
+
+    const itemData = useMemo(() => ({ lines, showIds }), [lines, showIds]);
+
+    if (tokens.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+                No tokens to display
+            </div>
+        );
+    }
+
+    return (
+        <div className="h-full overflow-auto" style={{ fontFamily: monospace }}>
+            <List
+                height={400}
+                width={9999}
+                itemCount={lines.length}
+                itemSize={24} // height per line
+                itemData={itemData}
+            >
+                {LineRow}
+            </List>
         </div>
     );
 }
-
 // --- Main Component ------------------------------------------------------
 
 export default function TokenAnalyzer() {
@@ -307,25 +373,11 @@ export default function TokenAnalyzer() {
         }
     }, [text, provider, model]);
 
-    // For counting purposes - only manual text
-    const manualTextTokens = useMemo<number[]>(() => {
-        if (provider === "Google") return []; // handled separately
-        try {
-            // Get manual text only (excluding file contents)
-            let manualText = text;
-            attachments.forEach(attachment => {
-                manualText = manualText.replace(attachment.content, '').trim();
-            });
-            return gptEncode(manualText, model);
-        } catch (e) {
-            return [];
-        }
-    }, [text, provider, model, attachments]);
+    // NOTE: manualTextTokens logic removed – we count the whole text to avoid double counting with attachments
 
     const decodedTokens = useMemo<string[]>(() => {
         if (provider === "Google") return [];
         try {
-            // Decode each token individually to show them separately
             return displayTokens.map(token => {
                 try {
                     return gptDecode([token], model);
@@ -397,7 +449,7 @@ export default function TokenAnalyzer() {
                 setTokenFreqData([]);
             }
         } else {
-            // For OpenAI, calculate tokens for attachments automatically
+            // For OpenAI, calculate tokens for attachments (for sidebar display) automatically
             const updatedAttachments = attachments.map(attachment => {
                 if (attachment.tokens === null) {
                     try {
@@ -414,16 +466,13 @@ export default function TokenAnalyzer() {
             if (updatedAttachments.some((att, idx) => att.tokens !== attachments[idx].tokens)) {
                 setAttachments(updatedAttachments);
             }
-            
-            // Calculate total tokens including attachments
-            const attachmentTokens = updatedAttachments.reduce((sum, att) => sum + (att.tokens || 0), 0);
-            const totalTokens = manualTextTokens.length + attachmentTokens;
-            
-            setTokenCount(totalTokens);
+
+            // Calculate total tokens from the full visible text only to avoid double counting when edits occur
+            setTokenCount(displayTokens.length);
             setTokenFreqData(calculateGptTokenFrequency(text));
             setNeedsRecalculation(false);
         }
-    }, [text, provider, apiKey, manualTextTokens.length, model, attachments, needsRecalculation]);
+    }, [text, provider, apiKey, displayTokens.length, model, attachments, needsRecalculation]);
 
     // --- Cost ---------------------------------------------------------------
     const modelRates = MODELS_CONFIG[provider][model];
@@ -856,6 +905,7 @@ export default function TokenAnalyzer() {
                                         <TokenizedText
                                             tokens={outputMode === "ids" ? displayTokens : decodedTokens}
                                             showIds={outputMode === "ids"}
+                                            model={model}
                                         />
                                     </div>
                                 )}
