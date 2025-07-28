@@ -1,31 +1,46 @@
 # Files Tokenizer and Analyzer
 
-A text analysis and tokenizer tool built with React, TypeScript, and Vite. It allows you to analyze text by calculating character count, word count, and token count using different tokenization methods. It also provides insights into word and token frequency.
+A tokenizer tool built with React, TypeScript, and Vite. Analyze text across multiple AI providers with real-time token counting, cost calculation, and advanced visualization features.
 
-> **Supports both GPT and Gemini/Gemma based tokenizer.**
+> **Supports OpenAI, Anthropic, and Google AI tokenizers with cost estimation.**
 
 **Check out: [https://tokenizer.twinql.ai/](https://tokenizer.twinql.ai/)**
 
 ## Features
 
-*   **Text Input:** Paste text directly into the text area or upload files.
-*   **File Upload:** Supports various file types, including:
-    *   Plain text (`.txt`)
-    *   Markdown (`.md`)
-    *   Documents (`.docx`)
-    *   Spreadsheets (`.xlsx`, `.xls`)
-    *   Code files (`.js`, `.ts`, `.py`, `.java`, `.c`, etc.)
-    *   And more! (See `ACCEPTED_EXTENSIONS` in `src/App.tsx`)
-*   **Metrics:**
-    *   Character Count
-    *   Word Count
-    *   Token Count
-*   **Tokenizers:**
-    *   **GPT Tokenizer:** Uses the `gpt-tokenizer` library for fast, local tokenization based on `gpt-4o` model.
-    *   **Gemini Tokenizer:** Uses the Google Generative AI API (`@google/genai`) to count tokens based on `gemini-2.5-flash` model. Requires a Google AI API key.
-*   **Frequency Analysis:**
-    *   Displays the top 10 most frequent words in the input text.
-    *   Displays the top 10 most frequent GPT tokens (when the GPT tokenizer is selected).
+### 🔤 **Text Analysis**
+*   **Text Input:** Paste text directly or upload multiple files simultaneously
+*   **Real-time Metrics:** Character count, word count, and token count
+*   **Frequency Analysis:** Top 10 most frequent words and tokens with interactive charts
+
+### 🤖 **Multi-Provider Support**
+*   **OpenAI:** Real-time tokenization with models like GPT-4o, o1, o3, o4-mini
+*   **Anthropic:** API-based counting for Claude Sonnet 4, Claude Opus 4, Claude 3.5 models
+*   **Google:** Gemini 2.5 Flash, Gemini 2.0 Flash, and Gemini 2.5 Pro support
+
+### 💰 **Cost Calculation**
+*   **Real-time Pricing:** Input/output cost estimation for all supported models
+*   **Multi-Currency:** USD and INR support with live exchange rates
+*   **Per-File Breakdown:** Individual token and cost analysis for attached files
+
+### 📁 **Advanced File Support**
+*   **Text Files:** `.txt`, `.md`, `.csv`, `.html`, `.css`
+*   **Code Files:** `.js`, `.jsx`, `.ts`, `.tsx`, `.json`, `.py`, `.java`, `.c`, `.cpp`, `.go`, `.rs`
+*   **Documents:** `.docx`, `.pdf` with full text extraction
+*   **Spreadsheets:** `.xlsx`, `.xls` with data parsing
+*   **Multi-file Upload:** Attach and analyze multiple files with individual token tracking
+
+### 🎨 **Visualization & UI**
+*   **Token Visualization:** Color-coded token display with virtualization for large texts
+*   **Interactive Charts:** Word and token frequency analysis with responsive charts
+*   **Dark/Light Mode:** Toggle between themes
+*   **Token/ID Toggle:** View actual tokens or their numeric IDs (OpenAI models)
+
+### ⚡ **User Experience**
+*   **Keyboard Shortcuts:** `Ctrl/Cmd + Enter` for quick token calculation
+*   **Local Storage:** API keys and preferences saved locally
+*   **Responsive Design:** Works across desktop and mobile devices
+*   **Real-time Updates:** Instant recalculation for OpenAI models
 
 ## Local Setup
 
@@ -40,9 +55,11 @@ A text analysis and tokenizer tool built with React, TypeScript, and Vite. It al
     # or
     yarn install
     ```
-3.  **Set up API Key (Optional for Gemini):**
-    *   If you want to use the Gemini tokenizer, obtain an API key from [Google AI Studio](https://aistudio.google.com/).
-    *   The application will prompt you to enter the API key when you select the Gemini tokenizer. **It will be stored locally in your browser**.
+3.  **Set up API Keys:**
+    *   **Anthropic:** Obtain API key from [Anthropic Console](https://console.anthropic.com/)
+    *   **Google:** Obtain API key from [Google AI Studio](https://aistudio.google.com/)
+    *   API keys are stored locally in your browser for security
+
 4.  **Run the development server:**
     ```bash
     npm run dev
@@ -50,6 +67,10 @@ A text analysis and tokenizer tool built with React, TypeScript, and Vite. It al
     yarn dev
     ```
 5.  Open your browser and navigate to the local development URL (usually `http://localhost:5173`).
+
+## Security
+
+> **No** data leaves your browser.
 
 ## Contributing
 
@@ -61,10 +82,10 @@ We are actively looking for contributions! They are heartily welcome! Please fee
 
 ## TODO (help please!)
 
-- [ ] Better and organized UI
-- [ ] Add claude tokenizer support
-- [ ] Input/Output Pricing for each model
-- [ ] Multi-file uploads
+- [x] ~~Better and organized UI~~
+- [x] ~~Add claude tokenizer support~~
+- [x] ~~Input/Output Pricing for each model~~
+- [x] ~~Multi-file uploads~~
 - [ ] Image token counting (from upload and screenshot)
 - [ ] Better text analysis and recommendations to reduce token usage
 - [ ] Automatic token minification
