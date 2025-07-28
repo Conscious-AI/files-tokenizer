@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, ChangeEvent, useRef } from "react";
 import { FixedSizeList as List } from "react-window";
 import { ModeToggle } from "@/components/mode-toggle";
+import { Loader } from "@/components/Loader";
 import { Button } from "@/components/ui/button";
 import {
     Select,
@@ -35,6 +36,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import * as mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
+import LogoSvg from "@/assets/logo.svg?react";
 
 // pdf.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs`;
@@ -76,30 +78,28 @@ type Provider = (typeof PROVIDERS)[number];
 
 const MODELS_CONFIG: Record<Provider, Record<string, { input: number; output: number }>> = {
     OpenAI: {
+        "gpt-4o": { input: 0.0000025, output: 0.00001 }, // $2.5/$10 per million
         "o4-mini": { input: 0.0000011, output: 0.0000044 }, // $1.1/$4.40 per million
         "o3": { input: 0.000002, output: 0.000008 }, // $2/$8 per million
         "o1": { input: 0.000015, output: 0.00006 }, // $15/$60 per million
-        "gpt-4o": { input: 0.0000025, output: 0.00001 }, // $2.5/$10 per million
         "gpt-4.1": { input: 0.000002, output: 0.000008 }, // $2/$8 per million
         "gpt-4": { input: 0.00003, output: 0.00006 }, // $30/$60 per million
         "gpt3.5": { input: 0.0000005, output: 0.0000015 }, // $0.50/$1.50 per million
         "gpt3": { input: 0.000002, output: 0.000002 }, // Legacy GPT-3
     },
     Anthropic: {
-        "claude-opus-4-20250514": { input: 0.000015, output: 0.000075 }, // $15/$75 per million
         "claude-sonnet-4-20250514": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
+        "claude-opus-4-20250514": { input: 0.000015, output: 0.000075 }, // $15/$75 per million
         "claude-3-7-sonnet-latest": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
         "claude-3-5-sonnet-latest": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
         "claude-3-5-haiku-latest": { input: 0.0000008, output: 0.000004 }, // $0.8/$4.0 per million
     },
     Google: {
-        "gemini-2.0-flash": { input: 0.0000001, output: 0.0000004 }, // $0.1/$0.4 per million
         "gemini-2.5-flash": { input: 0.0000003, output: 0.0000025 }, // $0.3/$2.5 per million
+        "gemini-2.0-flash": { input: 0.0000001, output: 0.0000004 }, // $0.1/$0.4 per million
         "gemini-2.5-pro": { input: 0.00000125, output: 0.00001 }, // $1.25/$10.00 per million (<=200k tokens)
     },
 };
-
-const USD_TO_INR = 83; // approximate conversion
 
 const pastelColors = [
     "rgba(107,64,216,.3)",
@@ -116,20 +116,20 @@ const formatNumber = (val: number | string): string => {
     return val.toLocaleString();
 };
 
-const debounce = <T extends (...args: any[]) => any>(
-    func: T,
-    wait: number,
-) => {
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    return function executedFunction(...args: Parameters<T>) {
-        const later = () => {
-            timeout = null;
-            func(...args);
-        };
-        if (timeout !== null) clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-};
+// const debounce = <T extends (...args: any[]) => any>(
+//     func: T,
+//     wait: number,
+// ) => {
+//     let timeout: ReturnType<typeof setTimeout> | null = null;
+//     return function executedFunction(...args: Parameters<T>) {
+//         const later = () => {
+//             timeout = null;
+//             func(...args);
+//         };
+//         if (timeout !== null) clearTimeout(timeout);
+//         timeout = setTimeout(later, wait);
+//     };
+// };
 
 // --- Tokenizer functions --------------------------------------------------
 
@@ -312,6 +312,7 @@ function TokenizedText({ tokens, showIds, model }: { tokens: (string | number)[]
         </div>
     );
 }
+
 // --- Main Component ------------------------------------------------------
 
 export default function TokenAnalyzer() {
@@ -324,22 +325,53 @@ export default function TokenAnalyzer() {
     const [wordFreqData, setWordFreqData] = useState<{ item: string; count: number }[]>([]);
     const [tokenFreqData, setTokenFreqData] = useState<{ item: string; count: number }[]>([]);
     const [currency, setCurrency] = useState<"USD" | "INR">("USD");
-    const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem("apiKey") || "");
+    const [apiKeys, setApiKeys] = useState<Record<Provider, string>>(() => ({
+        OpenAI: localStorage.getItem('openai_apiKey') || '',
+        Anthropic: localStorage.getItem('anthropic_apiKey') || '',
+        Google: localStorage.getItem('google_apiKey') || '',
+    }));
     const [error, setError] = useState<string>("");
-    const [, setIsCounting] = useState<boolean>(false);
     const [isCalculating, setIsCalculating] = useState<boolean>(false);
     const [needsRecalculation, setNeedsRecalculation] = useState<boolean>(false);
 
     const [outputMode, setOutputMode] = useState<"tokens" | "ids">("tokens");
+    
     // Track uploaded files with their content and token counts
     const [attachments, setAttachments] = useState<{ name: string; content: string; tokens: number | null }[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const [usdToInr, setUsdToInr] = useState<number>(Number(localStorage.getItem("usdToInr")) || 83);
+
+    // Auto-focus textarea on mount
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+        }
+    }, []);
 
     // Persist API key
     useEffect(() => {
-        localStorage.setItem("apiKey", apiKey);
-    }, [apiKey]);
+        Object.entries(apiKeys).forEach(([prov, key]) => {
+            localStorage.setItem(`${prov.toLowerCase()}_apiKey`, key);
+        });
+    }, [apiKeys]);
+
+    useEffect(() => {
+        const fetchRate = async () => {
+            try {
+                const response = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+                const data = await response.json();
+                const rate = data.rates.INR;
+                setUsdToInr(rate);
+                localStorage.setItem("usdToInr", rate.toString());
+            } catch (error) {
+                console.error("Failed to fetch USD to INR rate:", error);
+            }
+        };
+        fetchRate();
+    }, []);
 
     // Keyboard shortcut for calculation
     useEffect(() => {
@@ -347,7 +379,7 @@ export default function TokenAnalyzer() {
             const isMac = navigator.platform.toLowerCase().includes('mac');
             const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
             
-            if (isCtrlOrCmd && e.key === 'Enter' && !isCalculating && apiKey && needsRecalculation && (text.trim() || attachments.length > 0)) {
+            if (isCtrlOrCmd && e.key === 'Enter' && !isCalculating && apiKeys[provider] && needsRecalculation && (text.trim() || attachments.length > 0)) {
                 e.preventDefault();
                 if (provider === "Anthropic") {
                     calculateAnthropicTokens();
@@ -359,13 +391,13 @@ export default function TokenAnalyzer() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [provider, isCalculating, apiKey, needsRecalculation, text, attachments.length]);
+    }, [provider, isCalculating, apiKeys[provider], needsRecalculation, text, attachments.length]);
 
     // --- Helper calculations ------------------------------------------------
 
     // For display purposes - show all text tokens
     const displayTokens = useMemo<number[]>(() => {
-        if (provider === "Google") return []; // handled separately
+        if (provider !== "OpenAI") return [];
         try {
             return gptEncode(text, model);
         } catch (e) {
@@ -373,10 +405,8 @@ export default function TokenAnalyzer() {
         }
     }, [text, provider, model]);
 
-    // NOTE: manualTextTokens logic removed – we count the whole text to avoid double counting with attachments
-
     const decodedTokens = useMemo<string[]>(() => {
-        if (provider === "Google") return [];
+        if (provider !== "OpenAI") return [];
         try {
             return displayTokens.map(token => {
                 try {
@@ -430,10 +460,6 @@ export default function TokenAnalyzer() {
         }
     }, [model]);
 
-
-
-
-
     // Main effect - counts and frequencies
     useEffect(() => {
         setCharCount(text.length);
@@ -472,13 +498,14 @@ export default function TokenAnalyzer() {
             setTokenFreqData(calculateGptTokenFrequency(text));
             setNeedsRecalculation(false);
         }
-    }, [text, provider, apiKey, displayTokens.length, model, attachments, needsRecalculation]);
+    }, [text, provider, apiKeys[provider], displayTokens.length, model, attachments, needsRecalculation]);
 
     // --- Cost ---------------------------------------------------------------
+    
     const modelRates = MODELS_CONFIG[provider][model];
     const inputCostUSD = typeof tokenCount === "number" ? tokenCount * modelRates.input : 0;
     const outputCostUSD = typeof tokenCount === "number" ? tokenCount * modelRates.output : 0;
-    const conversion = currency === "INR" ? USD_TO_INR : 1;
+    const conversion = currency === "INR" ? usdToInr : 1;
     const formattedInputCost = (inputCostUSD * conversion).toFixed(2);
     const formattedOutputCost = (outputCostUSD * conversion).toFixed(2);
 
@@ -512,7 +539,7 @@ export default function TokenAnalyzer() {
 
     // Calculate tokens using Anthropic API
     const calculateAnthropicTokens = async () => {
-        if (!apiKey) {
+        if (!apiKeys[provider]) {
             setError("API key required for Anthropic token counting");
             return;
         }
@@ -521,7 +548,7 @@ export default function TokenAnalyzer() {
         setError("");
 
         try {
-            const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+            const client = new Anthropic({ apiKey: apiKeys[provider], dangerouslyAllowBrowser: true });
             
             // Get the user's manually entered text (excluding file contents)
             let manualText = text;
@@ -576,7 +603,7 @@ export default function TokenAnalyzer() {
 
     // Calculate tokens using Google Gemini API
     const calculateGeminiTokens = async () => {
-        if (!apiKey) {
+        if (!apiKeys[provider]) {
             setError("API key required for Gemini token counting");
             return;
         }
@@ -585,14 +612,14 @@ export default function TokenAnalyzer() {
         setError("");
 
         try {
-            const genAI = new GoogleGenAI({ apiKey });
+            const genAI = new GoogleGenAI({ apiKey: apiKeys[provider] });
 
             // Prepare Gemini model instance based on the user-selected model
             // The @google/genai typings may not include getGenerativeModel yet. Use a safe fallback.
             // @ts-ignore - dynamic access to potentially available method
             const geminiModel: any = (genAI as any).getGenerativeModel
                 ? // @ts-ignore
-                  (genAI as any).getGenerativeModel({ model })
+                  genAI.getGenerativeModel({ model })
                 : {
                     // Fallback wrapper that proxies to the old models.countTokens method
                     countTokens: ({ contents }: { contents: any }) => (genAI as any).models.countTokens({ model, contents }),
@@ -707,14 +734,14 @@ export default function TokenAnalyzer() {
         }
     };
 
-    // --- JSX ---------------------------------------------------------------
+    // --- UI/Layout ---------------------------------------------------------------
 
     return (
         <div className="flex flex-col h-screen bg-background text-foreground">
             {/* Header */}
             <header className="flex items-center justify-between gap-2 px-4 py-2 border-b">
                 <div className="flex items-center gap-2">
-                    <div className="text-xl">⭐</div>
+                    <LogoSvg className="w-12 h-12 max-w-12 max-h-12" />
                     <h1 className="text-lg font-semibold">Tokens Analyzer</h1>
                 </div>
                 <ModeToggle />
@@ -733,11 +760,8 @@ export default function TokenAnalyzer() {
                                 {/* Tokens */}
                                 <div className="flex flex-col items-center justify-center h-24 rounded-none border bg-gradient-to-br from-background to-muted p-2 relative">
                                     {isCalculating && (provider === "Google" || provider === "Anthropic") && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-background/50">
-                                            <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
+                                        <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+                                            <Loader />
                                         </div>
                                     )}
                                     <div className="text-2xl font-semibold font-mono">
@@ -820,9 +844,9 @@ export default function TokenAnalyzer() {
                     {(provider === "Anthropic" || provider === "Google") && (
                         <Button
                             onClick={provider === "Anthropic" ? calculateAnthropicTokens : calculateGeminiTokens}
-                            disabled={isCalculating || !apiKey || (!text.trim() && attachments.length === 0)}
+                            disabled={isCalculating || !apiKeys[provider] || (!text.trim() && attachments.length === 0)}
                             className="w-full"
-                            variant={needsRecalculation && apiKey && (text.trim() || attachments.length > 0) ? "default" : "outline"}
+                            variant={needsRecalculation && apiKeys[provider] && (text.trim() || attachments.length > 0) ? "default" : "outline"}
                         >
                             Calculate Tokens
                         </Button>
@@ -866,6 +890,7 @@ export default function TokenAnalyzer() {
                             </CardHeader>
                             <CardContent className="flex-1 flex flex-col gap-2">
                                 <Textarea
+                                    ref={textareaRef}
                                     value={text}
                                     onChange={handleTextChange}
                                     placeholder="Paste or type your input text..."
@@ -953,9 +978,9 @@ export default function TokenAnalyzer() {
                             <CardContent>
                                 <Input
                                     type="password"
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="Enter API Key"
+                                    value={apiKeys[provider]}
+                                    onChange={(e) => setApiKeys(prev => ({ ...prev, [provider]: e.target.value }))}
+                                    placeholder="API Key"
                                 />
                             </CardContent>
                         </Card>
@@ -1015,11 +1040,8 @@ export default function TokenAnalyzer() {
                                 {attachments.map((attachment, index) => (
                                     <div key={index} className="flex items-center justify-between gap-2 border rounded-none p-2 relative">
                                         {isCalculating && attachment.tokens === null && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-background/50">
-                                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
+                                            <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+                                                <Loader size="sm" />
                                             </div>
                                         )}
                                         <div className="flex-1 min-w-0 text-left">
