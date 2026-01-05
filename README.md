@@ -86,6 +86,6 @@ We are actively looking for contributions! They are heartily welcome! Please fee
 - [x] ~~Add claude tokenizer support~~
 - [x] ~~Input/Output Pricing for each model~~
 - [x] ~~Multi-file uploads~~
-- [ ] Image token counting (from upload and screenshot)
+- [x] ~~Image token counting (from upload and screenshot)~~
 - [ ] Better text analysis and recommendations to reduce token usage
 - [ ] Automatic token minification

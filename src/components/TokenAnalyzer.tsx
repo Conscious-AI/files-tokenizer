@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback, ChangeEvent, useRef } from "react";
 import { FixedSizeList as List } from "react-window";
+import { toast } from "sonner";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Loader } from "@/components/Loader";
 import { Button } from "@/components/ui/button";
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
@@ -69,35 +72,90 @@ const ACCEPTED_EXTENSIONS = [
     ".xlsx",
     ".xls",
     ".pdf",
+    // Images
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
 ];
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
 const ACCEPT_STRING = [...ACCEPTED_EXTENSIONS].join(",");
 
 const PROVIDERS = ["OpenAI", "Anthropic", "Google"] as const;
 
 type Provider = (typeof PROVIDERS)[number];
 
-const MODELS_CONFIG: Record<Provider, Record<string, { input: number; output: number }>> = {
-    OpenAI: {
-        "gpt-4o": { input: 0.0000025, output: 0.00001 }, // $2.5/$10 per million
-        "o4-mini": { input: 0.0000011, output: 0.0000044 }, // $1.1/$4.40 per million
-        "o3": { input: 0.000002, output: 0.000008 }, // $2/$8 per million
-        "o1": { input: 0.000015, output: 0.00006 }, // $15/$60 per million
-        "gpt-4.1": { input: 0.000002, output: 0.000008 }, // $2/$8 per million
-        "gpt-4": { input: 0.00003, output: 0.00006 }, // $30/$60 per million
-        "gpt3.5": { input: 0.0000005, output: 0.0000015 }, // $0.50/$1.50 per million
-        "gpt3": { input: 0.000002, output: 0.000002 }, // Legacy GPT-3
+// OpenAI models grouped by encoding
+const OPENAI_MODEL_GROUPS: { encoding: string; models: Record<string, { input: number; output: number }> }[] = [
+    {
+        encoding: "o200k_base",
+        models: {
+            // GPT-5 series (Standard pricing)
+            "gpt-5.2": { input: 0.00000175, output: 0.000014 }, // $1.75/$14 per million
+            "gpt-5.1": { input: 0.00000125, output: 0.00001 }, // $1.25/$10 per million
+            "gpt-5": { input: 0.00000125, output: 0.00001 }, // $1.25/$10 per million
+            "gpt-5-mini": { input: 0.00000025, output: 0.000002 }, // $0.25/$2 per million
+            "gpt-5-nano": { input: 0.00000005, output: 0.0000004 }, // $0.05/$0.40 per million
+            "gpt-5.2-pro": { input: 0.000021, output: 0.000168 }, // $21/$168 per million
+            "gpt-5-pro": { input: 0.000015, output: 0.00012 }, // $15/$120 per million
+            // GPT-4.1 series
+            "gpt-4.1": { input: 0.000002, output: 0.000008 }, // $2/$8 per million
+            "gpt-4.1-mini": { input: 0.0000004, output: 0.0000016 }, // $0.40/$1.60 per million
+            "gpt-4.1-nano": { input: 0.0000001, output: 0.0000004 }, // $0.10/$0.40 per million
+            // GPT-4o series
+            "gpt-4o": { input: 0.0000025, output: 0.00001 }, // $2.5/$10 per million
+            "gpt-4o-mini": { input: 0.00000015, output: 0.0000006 }, // $0.15/$0.60 per million
+            // O-series reasoning models
+            "o1": { input: 0.000015, output: 0.00006 }, // $15/$60 per million
+            "o1-pro": { input: 0.00015, output: 0.0006 }, // $150/$600 per million
+            "o3-pro": { input: 0.00002, output: 0.00008 }, // $20/$80 per million
+            "o3": { input: 0.000002, output: 0.000008 }, // $2/$8 per million
+            "o4-mini": { input: 0.0000011, output: 0.0000044 }, // $1.10/$4.40 per million
+            "o3-mini": { input: 0.0000011, output: 0.0000044 }, // $1.10/$4.40 per million
+            "o1-mini": { input: 0.0000011, output: 0.0000044 }, // $1.10/$4.40 per million
+        },
     },
+    {
+        encoding: "cl100k_base",
+        models: {
+            // Legacy models
+            "gpt-4": { input: 0.00003, output: 0.00006 }, // $30/$60 per million
+            "gpt-3.5-turbo": { input: 0.0000005, output: 0.0000015 }, // $0.50/$1.50 per million
+        },
+    },
+];
+
+// Flatten OpenAI models for MODELS_CONFIG
+const OPENAI_MODELS = OPENAI_MODEL_GROUPS.reduce((acc, group) => {
+    return { ...acc, ...group.models };
+}, {} as Record<string, { input: number; output: number }>);
+
+const MODELS_CONFIG: Record<Provider, Record<string, { input: number; output: number }>> = {
+    OpenAI: OPENAI_MODELS,
     Anthropic: {
+        // Latest Claude 4.5 models
+        "claude-sonnet-4-5-20250929": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
+        "claude-opus-4-5-20251101": { input: 0.000005, output: 0.000025 }, // $5/$25 per million
+        "claude-haiku-4-5-20251001": { input: 0.000001, output: 0.000005 }, // $1/$5 per million
+        // Legacy Claude 4 models
+        "claude-opus-4-1-20250805": { input: 0.000015, output: 0.000075 }, // $15/$75 per million
         "claude-sonnet-4-20250514": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
         "claude-opus-4-20250514": { input: 0.000015, output: 0.000075 }, // $15/$75 per million
-        "claude-3-7-sonnet-latest": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
-        "claude-3-5-sonnet-latest": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
-        "claude-3-5-haiku-latest": { input: 0.0000008, output: 0.000004 }, // $0.8/$4.0 per million
+        // Legacy Claude 3 models
+        "claude-3-7-sonnet-20250219": { input: 0.000003, output: 0.000015 }, // $3/$15 per million
+        "claude-3-haiku-20240307": { input: 0.00000025, output: 0.00000125 }, // $0.25/$1.25 per million
     },
     Google: {
-        "gemini-2.5-flash": { input: 0.0000003, output: 0.0000025 }, // $0.3/$2.5 per million
-        "gemini-2.0-flash": { input: 0.0000001, output: 0.0000004 }, // $0.1/$0.4 per million
-        "gemini-2.5-pro": { input: 0.00000125, output: 0.00001 }, // $1.25/$10.00 per million (<=200k tokens)
+        // Gemini 3 series
+        "gemini-3-pro-preview": { input: 0.000002, output: 0.000012 }, // $2/$12 per million (<=200k)
+        "gemini-3-flash-preview": { input: 0.0000005, output: 0.000003 }, // $0.50/$3 per million
+        // Gemini 2.5 series
+        "gemini-2.5-flash": { input: 0.00000015, output: 0.0000006 }, // $0.15/$0.60 per million
+        "gemini-2.5-pro": { input: 0.00000125, output: 0.00001 }, // $1.25/$10 per million (<=200k)
+        // Gemini 2.0 series
+        "gemini-2.0-flash": { input: 0.0000001, output: 0.0000004 }, // $0.10/$0.40 per million
+        "gemini-2.0-flash-lite": { input: 0.0000003, output: 0.0000025 }, // $0.30/$2.50 per million
     },
 };
 
@@ -134,20 +192,114 @@ const formatNumber = (val: number | string): string => {
 // --- Tokenizer functions --------------------------------------------------
 
 const getEncodingForModel = (model: string): "o200k_base" | "cl100k_base" => {
-    // o-series models, like o1-*, o3-* and o4-mini use o200k_base
-    if (model.startsWith("o1") || model.startsWith("o3") || model === "o4-mini") {
+    // GPT-5 series uses o200k_base
+    if (model.startsWith("gpt-5")) {
         return "o200k_base";
     }
-    // gpt-4o uses o200k_base
-    if (model === "gpt-4o") {
+    // o-series models, like o1-*, o3-*, o4-* use o200k_base
+    if (model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) {
+        return "o200k_base";
+    }
+    // gpt-4o and gpt-4o-mini use o200k_base
+    if (model.startsWith("gpt-4o")) {
+        return "o200k_base";
+    }
+    // gpt-4.1 series uses o200k_base
+    if (model.startsWith("gpt-4.1")) {
         return "o200k_base";
     }
     // gpt-4-* and gpt-3.5-* use cl100k_base
-    if (model.startsWith("gpt-4") || model.startsWith("gpt3.5") || model.startsWith("gpt3")) {
+    if (model.startsWith("gpt-4") || model.startsWith("gpt-3")) {
         return "cl100k_base";
     }
-    // Default to cl100k_base
-    return "cl100k_base";
+    // Default to o200k_base for newer models
+    return "o200k_base";
+};
+
+// --- Image Token Calculation Functions ---
+
+/**
+ * Calculate OpenAI image tokens based on dimensions
+ * Formula for high detail:
+ * 1. Scale to fit within 2048x2048 (maintaining aspect ratio)
+ * 2. Scale so shortest side is 768px
+ * 3. Count 512x512 tiles
+ * 4. Tokens = 85 (base) + 170 * number_of_tiles
+ * 
+ * Low detail: Fixed 85 tokens
+ */
+const calculateOpenAIImageTokens = (
+    width: number,
+    height: number,
+    detail: "low" | "high" = "high"
+): number => {
+    const BASE_TOKENS = 85;
+    const TOKENS_PER_TILE = 170;
+    const TILE_SIZE = 512;
+    const MAX_SIZE = 2048;
+    const TARGET_SHORT_SIDE = 768;
+
+    if (detail === "low") {
+        return BASE_TOKENS;
+    }
+
+    // Step 1: Scale to fit within 2048x2048
+    let scaledWidth = width;
+    let scaledHeight = height;
+    if (width > MAX_SIZE || height > MAX_SIZE) {
+        const scale = MAX_SIZE / Math.max(width, height);
+        scaledWidth = Math.floor(width * scale);
+        scaledHeight = Math.floor(height * scale);
+    }
+
+    // Step 2: Scale so shortest side is 768px
+    const shortSide = Math.min(scaledWidth, scaledHeight);
+    if (shortSide > TARGET_SHORT_SIDE) {
+        const scale = TARGET_SHORT_SIDE / shortSide;
+        scaledWidth = Math.floor(scaledWidth * scale);
+        scaledHeight = Math.floor(scaledHeight * scale);
+    }
+
+    // Step 3: Count tiles (512x512)
+    const tilesX = Math.ceil(scaledWidth / TILE_SIZE);
+    const tilesY = Math.ceil(scaledHeight / TILE_SIZE);
+    const totalTiles = tilesX * tilesY;
+
+    // Step 4: Calculate tokens
+    return BASE_TOKENS + TOKENS_PER_TILE * totalTiles;
+};
+
+/**
+ * Calculate Google Gemini image tokens based on dimensions
+ * - Images ≤384px on both sides = 258 tokens
+ * - Larger images divided into 768x768 tiles, each = 258 tokens
+ */
+const calculateGeminiImageTokens = (width: number, height: number): number => {
+    const TOKENS_PER_TILE = 258;
+    const SMALL_IMAGE_THRESHOLD = 384;
+    const TILE_SIZE = 768;
+
+    // Small images (both dimensions ≤384px)
+    if (width <= SMALL_IMAGE_THRESHOLD && height <= SMALL_IMAGE_THRESHOLD) {
+        return TOKENS_PER_TILE;
+    }
+
+    // Larger images: count 768x768 tiles
+    const tilesX = Math.ceil(width / TILE_SIZE);
+    const tilesY = Math.ceil(height / TILE_SIZE);
+    return tilesX * tilesY * TOKENS_PER_TILE;
+};
+
+/**
+ * Get image dimensions from a data URL
+ */
+const getImageDimensions = (dataUrl: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.width, height: img.height });
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
 };
 
 const gptEncode = (text: string, model: string): number[] => {
@@ -330,14 +482,21 @@ export default function TokenAnalyzer() {
         Anthropic: localStorage.getItem('anthropic_apiKey') || '',
         Google: localStorage.getItem('google_apiKey') || '',
     }));
-    const [error, setError] = useState<string>("");
     const [isCalculating, setIsCalculating] = useState<boolean>(false);
     const [needsRecalculation, setNeedsRecalculation] = useState<boolean>(false);
 
     const [outputMode, setOutputMode] = useState<"tokens" | "ids">("tokens");
     
     // Track uploaded files with their content and token counts
-    const [attachments, setAttachments] = useState<{ name: string; content: string; tokens: number | null }[]>([]);
+    // For images: content is base64 data URL, isImage flag, and dimensions
+    const [attachments, setAttachments] = useState<{
+        name: string;
+        content: string;
+        tokens: number | null;
+        isImage?: boolean;
+        width?: number;
+        height?: number;
+    }[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -478,6 +637,12 @@ export default function TokenAnalyzer() {
             // For OpenAI, calculate tokens for attachments (for sidebar display) automatically
             const updatedAttachments = attachments.map(attachment => {
                 if (attachment.tokens === null) {
+                    // For images, calculate using image token formula
+                    if (attachment.isImage && attachment.width && attachment.height) {
+                        const tokens = calculateOpenAIImageTokens(attachment.width, attachment.height, "high");
+                        return { ...attachment, tokens };
+                    }
+                    // For text files
                     try {
                         const tokens = gptEncode(attachment.content, model);
                         return { ...attachment, tokens: tokens.length };
@@ -493,8 +658,12 @@ export default function TokenAnalyzer() {
                 setAttachments(updatedAttachments);
             }
 
-            // Calculate total tokens from the full visible text only to avoid double counting when edits occur
-            setTokenCount(displayTokens.length);
+            // Calculate total tokens: text tokens + image tokens from attachments
+            const imageTokens = updatedAttachments
+                .filter(att => att.isImage)
+                .reduce((sum, att) => sum + (att.tokens || 0), 0);
+            
+            setTokenCount(displayTokens.length + imageTokens);
             setTokenFreqData(calculateGptTokenFrequency(text));
             setNeedsRecalculation(false);
         }
@@ -517,10 +686,22 @@ export default function TokenAnalyzer() {
         const prov = val as Provider;
         setProvider(prov);
         setModel(Object.keys(MODELS_CONFIG[prov])[0]);
-        setError("");
         setTokenCount(0);
-        // Reset attachment tokens when provider changes
-        setAttachments(prev => prev.map(attachment => ({ ...attachment, tokens: null })));
+        // Reset attachment tokens when provider changes (except for images which we can recalculate)
+        setAttachments(prev => prev.map(attachment => {
+            if (attachment.isImage && attachment.width && attachment.height) {
+                // Recalculate image tokens for new provider
+                let tokens: number | null = null;
+                if (prov === "OpenAI") {
+                    tokens = calculateOpenAIImageTokens(attachment.width, attachment.height, "high");
+                } else if (prov === "Google") {
+                    tokens = calculateGeminiImageTokens(attachment.width, attachment.height);
+                }
+                // For Anthropic, leave as null to be calculated via API
+                return { ...attachment, tokens };
+            }
+            return { ...attachment, tokens: null };
+        }));
         if (prov === "Google" || prov === "Anthropic") {
             setNeedsRecalculation(true);
         }
@@ -540,20 +721,19 @@ export default function TokenAnalyzer() {
     // Calculate tokens using Anthropic API
     const calculateAnthropicTokens = async () => {
         if (!apiKeys[provider]) {
-            setError("API key required for Anthropic token counting");
+            toast.error("API key required for Anthropic token counting");
             return;
         }
 
         setIsCalculating(true);
-        setError("");
 
         try {
             const client = new Anthropic({ apiKey: apiKeys[provider], dangerouslyAllowBrowser: true });
             
             // Get the user's manually entered text (excluding file contents)
             let manualText = text;
-            attachments.forEach(attachment => {
-                // Remove each attachment's content from the text to get only manual input
+            attachments.filter(a => !a.isImage).forEach(attachment => {
+                // Remove each text attachment's content from the text to get only manual input
                 manualText = manualText.replace(attachment.content, '').trim();
             });
 
@@ -561,13 +741,40 @@ export default function TokenAnalyzer() {
             const updatedAttachments = await Promise.all(
                 attachments.map(async (attachment) => {
                     try {
-                        const response = await client.messages.countTokens({
-                            model: model as any,
-                            messages: [{ role: 'user', content: attachment.content }]
-                        });
-                        return { ...attachment, tokens: response.input_tokens };
-                    } catch (err) {
+                        if (attachment.isImage) {
+                            // For images, use the image content block format
+                            const base64Data = attachment.content.split(',')[1]; // Remove data:image/...;base64, prefix
+                            const mediaType = attachment.content.split(';')[0].split(':')[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+                            const response = await client.messages.countTokens({
+                                model: model as any,
+                                messages: [{
+                                    role: 'user',
+                                    content: [{
+                                        type: 'image',
+                                        source: {
+                                            type: 'base64',
+                                            media_type: mediaType,
+                                            data: base64Data,
+                                        }
+                                    }]
+                                }]
+                            });
+                            return { ...attachment, tokens: response.input_tokens };
+                        } else {
+                            // For text content
+                            const response = await client.messages.countTokens({
+                                model: model as any,
+                                messages: [{ role: 'user', content: attachment.content }]
+                            });
+                            return { ...attachment, tokens: response.input_tokens };
+                        }
+                    } catch (err: any) {
                         console.error(`Error counting tokens for ${attachment.name}:`, err);
+                        // Re-throw authentication errors so they're shown to user
+                        if (err?.status === 401 || err?.message?.includes('authentication')) {
+                            throw err;
+                        }
+                        toast.error(`Failed to count tokens for ${attachment.name}`);
                         return attachment;
                     }
                 })
@@ -584,6 +791,7 @@ export default function TokenAnalyzer() {
                     manualTextTokens = response.input_tokens;
                 } catch (err) {
                     console.error('Error counting tokens for manual text:', err);
+                    toast.error("Failed to count tokens for text input");
                 }
             }
 
@@ -594,8 +802,9 @@ export default function TokenAnalyzer() {
             const totalTokens = attachmentTokens + manualTextTokens;
             setTokenCount(totalTokens);
             setNeedsRecalculation(false);
+            toast.success("Token count calculated successfully");
         } catch (err: any) {
-            setError(err.message || "Anthropic API error");
+            toast.error(err.message || "Anthropic API error");
         } finally {
             setIsCalculating(false);
         }
@@ -604,12 +813,11 @@ export default function TokenAnalyzer() {
     // Calculate tokens using Google Gemini API
     const calculateGeminiTokens = async () => {
         if (!apiKeys[provider]) {
-            setError("API key required for Gemini token counting");
+            toast.error("API key required for Gemini token counting");
             return;
         }
 
         setIsCalculating(true);
-        setError("");
 
         try {
             const genAI = new GoogleGenAI({ apiKey: apiKeys[provider] });
@@ -631,21 +839,27 @@ export default function TokenAnalyzer() {
                     const resp: any = await geminiModel.countTokens({ contents: content });
                     // Different versions may use different field names
                     return resp.totalTokens ?? resp.total_tokens ?? 0;
-                } catch (err) {
+                } catch (err: any) {
                     console.error('Gemini token count error:', err);
+                    toast.error(err.message || "Failed to count tokens");
                     return 0;
                 }
             };
 
             // Get the user's manually entered text (excluding file contents)
             let manualText = text;
-            attachments.forEach(attachment => {
+            attachments.filter(a => !a.isImage).forEach(attachment => {
                 manualText = manualText.replace(attachment.content, '').trim();
             });
 
             // Calculate tokens for each attachment
             const updatedAttachments = await Promise.all(
                 attachments.map(async (attachment) => {
+                    if (attachment.isImage && attachment.width && attachment.height) {
+                        // For images, use local calculation (Gemini API may not support image token counting directly)
+                        const tokens = calculateGeminiImageTokens(attachment.width, attachment.height);
+                        return { ...attachment, tokens };
+                    }
                     const tokens = await getTokenCount(attachment.content);
                     return { ...attachment, tokens };
                 })
@@ -661,8 +875,9 @@ export default function TokenAnalyzer() {
             const totalTokens = attachmentTokens + manualTextTokens;
             setTokenCount(totalTokens);
             setNeedsRecalculation(false);
+            toast.success("Token count calculated successfully");
         } catch (err: any) {
-            setError(err.message || "Gemini API error");
+            toast.error(err.message || "Gemini API error");
         } finally {
             setIsCalculating(false);
         }
@@ -675,7 +890,46 @@ export default function TokenAnalyzer() {
 
         const ext = "." + file.name.split(".").pop()?.toLowerCase();
         if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-            alert(`Unsupported file type: ${ext}`);
+            toast.error(`Unsupported file type: ${ext}`);
+            return;
+        }
+
+        // Handle image files
+        if (IMAGE_EXTENSIONS.includes(ext)) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const dataUrl = e.target?.result as string;
+                    const dimensions = await getImageDimensions(dataUrl);
+                    
+                    // Calculate tokens based on provider
+                    let tokens: number | null = null;
+                    if (provider === "OpenAI") {
+                        tokens = calculateOpenAIImageTokens(dimensions.width, dimensions.height, "high");
+                    } else if (provider === "Google") {
+                        tokens = calculateGeminiImageTokens(dimensions.width, dimensions.height);
+                    }
+                    // For Anthropic, tokens will be calculated via API
+                    
+                    setAttachments((prev) => [...prev, {
+                        name: file.name,
+                        content: dataUrl,
+                        tokens,
+                        isImage: true,
+                        width: dimensions.width,
+                        height: dimensions.height,
+                    }]);
+                    
+                    toast.success(`Image "${file.name}" attached (${dimensions.width}×${dimensions.height})`);
+                    
+                    if (provider === "Google" || provider === "Anthropic") {
+                        setNeedsRecalculation(true);
+                    }
+                } catch (err: any) {
+                    toast.error(err.message || "Image processing error");
+                }
+            };
+            reader.readAsDataURL(file);
             return;
         }
 
@@ -719,11 +973,14 @@ export default function TokenAnalyzer() {
                     const separator = prevText.trim() ? "\n\n" : "";
                     return prevText + separator + trimmed;
                 });
+                
+                toast.success(`File "${file.name}" attached`);
+                
                 if (provider === "Google" || provider === "Anthropic") {
                     setNeedsRecalculation(true);
                 }
             } catch (err: any) {
-                setError(err.message || "File processing error");
+                toast.error(err.message || "File processing error");
             }
         };
 
@@ -997,22 +1254,28 @@ export default function TokenAnalyzer() {
                                     <SelectValue placeholder="Select model" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {Object.keys(MODELS_CONFIG[provider]).map((m) => (
-                                        <SelectItem value={m} key={m}>
-                                            {m}
-                                        </SelectItem>
-                                    ))}
+                                    {provider === "OpenAI" ? (
+                                        OPENAI_MODEL_GROUPS.map((group) => (
+                                            <SelectGroup key={group.encoding}>
+                                                <SelectLabel className="font-mono text-xs opacity-70">{group.encoding}</SelectLabel>
+                                                {Object.keys(group.models).map((m) => (
+                                                    <SelectItem value={m} key={m}>
+                                                        {m}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        ))
+                                    ) : (
+                                        Object.keys(MODELS_CONFIG[provider]).map((m) => (
+                                            <SelectItem value={m} key={m}>
+                                                {m}
+                                            </SelectItem>
+                                        ))
+                                    )}
                                 </SelectContent>
                             </Select>
                         </CardContent>
                     </Card>
-
-                    {/* Error */}
-                    {error && (
-                        <Card className="border-destructive text-destructive bg-transparent rounded-none">
-                            <CardContent className="text-sm p-4">Error: {error}</CardContent>
-                        </Card>
-                    )}
 
                     {/* Files Attached */}
                     <Card className="bg-transparent rounded-none">
@@ -1038,10 +1301,20 @@ export default function TokenAnalyzer() {
                             </div>
                             <div className="space-y-2">
                                 {attachments.map((attachment, index) => (
-                                    <div key={index} className="flex items-center justify-between gap-2 border rounded-none p-2 relative">
+                                    <div key={index} className="flex items-center gap-2 border rounded-none p-2 relative">
                                         {isCalculating && attachment.tokens === null && (
                                             <div className="absolute inset-0 flex items-center justify-center bg-background/70">
                                                 <Loader size="sm" />
+                                            </div>
+                                        )}
+                                        {/* Image thumbnail */}
+                                        {attachment.isImage && (
+                                            <div className="flex-shrink-0 w-10 h-10 rounded overflow-hidden border bg-muted">
+                                                <img
+                                                    src={attachment.content}
+                                                    alt={attachment.name}
+                                                    className="w-full h-full object-cover"
+                                                />
                                             </div>
                                         )}
                                         <div className="flex-1 min-w-0 text-left">
@@ -1049,6 +1322,9 @@ export default function TokenAnalyzer() {
                                                 {attachment.name}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
+                                                {attachment.isImage && attachment.width && attachment.height && (
+                                                    <span className="mr-1">{attachment.width}×{attachment.height}</span>
+                                                )}
                                                 {attachment.tokens === null ? "Not calculated" : `${formatNumber(attachment.tokens)} tokens`}
                                             </div>
                                         </div>
@@ -1056,35 +1332,39 @@ export default function TokenAnalyzer() {
                                             size="icon"
                                             variant="ghost"
                                             onClick={() => {
-                                                // Remove attachment and its content from text
+                                                // Remove attachment and its content from text (only for non-images)
                                                 const attachmentToRemove = attachments[index];
                                                 setAttachments((prev) => prev.filter((_, i) => i !== index));
-                                                setText((prevText) => {
-                                                    const content = attachmentToRemove.content;
-                                                    let newText = prevText;
+                                                
+                                                // Only modify text for non-image attachments
+                                                if (!attachmentToRemove.isImage) {
+                                                    setText((prevText) => {
+                                                        const content = attachmentToRemove.content;
+                                                        let newText = prevText;
 
-                                                    // 1. Content preceded by two newlines (how it was appended)
-                                                    const withPrefix = `\n\n${content}`;
-                                                    const idxPrefix = newText.indexOf(withPrefix);
-                                                    if (idxPrefix !== -1) {
-                                                        newText = newText.slice(0, idxPrefix) + newText.slice(idxPrefix + withPrefix.length);
-                                                    } else {
-                                                        // 2. Content followed by two newlines (beginning of text)
-                                                        const withSuffix = `${content}\n\n`;
-                                                        const idxSuffix = newText.indexOf(withSuffix);
-                                                        if (idxSuffix !== -1) {
-                                                            newText = newText.slice(0, idxSuffix) + newText.slice(idxSuffix + withSuffix.length);
+                                                        // 1. Content preceded by two newlines (how it was appended)
+                                                        const withPrefix = `\n\n${content}`;
+                                                        const idxPrefix = newText.indexOf(withPrefix);
+                                                        if (idxPrefix !== -1) {
+                                                            newText = newText.slice(0, idxPrefix) + newText.slice(idxPrefix + withPrefix.length);
                                                         } else {
-                                                            // 3. Fallback: first occurrence of the raw content
-                                                            const idx = newText.indexOf(content);
-                                                            if (idx !== -1) {
-                                                                newText = newText.slice(0, idx) + newText.slice(idx + content.length);
+                                                            // 2. Content followed by two newlines (beginning of text)
+                                                            const withSuffix = `${content}\n\n`;
+                                                            const idxSuffix = newText.indexOf(withSuffix);
+                                                            if (idxSuffix !== -1) {
+                                                                newText = newText.slice(0, idxSuffix) + newText.slice(idxSuffix + withSuffix.length);
+                                                            } else {
+                                                                // 3. Fallback: first occurrence of the raw content
+                                                                const idx = newText.indexOf(content);
+                                                                if (idx !== -1) {
+                                                                    newText = newText.slice(0, idx) + newText.slice(idx + content.length);
+                                                                }
                                                             }
                                                         }
-                                                    }
 
-                                                    return newText;
-                                                });
+                                                        return newText;
+                                                    });
+                                                }
                                                 if (provider === "Google" || provider === "Anthropic") {
                                                     setNeedsRecalculation(true);
                                                 }
